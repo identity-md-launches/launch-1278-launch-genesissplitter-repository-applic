@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @dev The read side of the plane's `LaunchRegistry` (packages/contracts/src/LaunchRegistry.sol). Only the
 /// factory that owns the registry can write it, so a launch's artifacts are what that launch deployed.
@@ -45,10 +46,13 @@ interface ILaunchRegistry {
 /// Nobody configures anything, so there is no key to trust, no deadline and nothing to cancel. The amounts are
 /// public in the launch's verified source. Anyone may run a launch with this contract as `remainderTo`; it then
 /// splits only that launch's own token, so it cannot touch another's.
+/// Use only for custom-token remainders, after rehearsing the launch and its declarations. Token transfer
+/// rules must permit exact payments from this address to every bucket and the Treasury. Unsplit tokens
+/// cannot be swept; missing or malformed allocation getters declare nothing.
 ///
 /// The constructor reads no other contract: the launch that deploys this rehearses constructors on a bare
 /// chain, where neither the registry nor the Treasury has code.
-contract GenesisSplitter {
+contract GenesisSplitter is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 private constant CUSTOM_TOKEN = "custom_token";
@@ -73,7 +77,7 @@ contract GenesisSplitter {
     error NotSplit(address token);
 
     /// @param registry_ The chain's `ProjectFactory.registry()`.
-    /// @param treasury_ The protocol Treasury: receives what no bucket declares, and stray tokens.
+    /// @param treasury_ The protocol Treasury: receives what no bucket declares and later deposits of split tokens.
     constructor(address registry_, address treasury_) {
         if (registry_ == address(0) || treasury_ == address(0)) revert ZeroAddress();
         registry = ILaunchRegistry(registry_);
@@ -81,7 +85,7 @@ contract GenesisSplitter {
     }
 
     /// @notice Pay `launchNumber`'s remainder out to its own contracts. Anyone, once per token.
-    function split(uint64 launchNumber) external {
+    function split(uint64 launchNumber) external nonReentrant {
         if (registry.launchOf(launchNumber).kind != CUSTOM_TOKEN) revert NotCustomTokenLaunch(launchNumber);
         ILaunchRegistry.Artifact[] memory artifacts = registry.artifactsOf(launchNumber);
 
@@ -116,7 +120,7 @@ contract GenesisSplitter {
     }
 
     /// @notice After a token has been split, anything of it that arrives later goes to the Treasury.
-    function sweep(address token) external {
+    function sweep(address token) external nonReentrant {
         if (!isSplit[token]) revert NotSplit(token);
         uint256 amount = IERC20(token).balanceOf(address(this));
         IERC20(token).safeTransfer(treasury, amount);
