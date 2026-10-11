@@ -1,0 +1,13 @@
+{
+  "kind": "evm_contracts",
+  "contracts": [
+    {
+      "contract": "GenesisSplitter",
+      "constructorArgs": [
+        "0x7c9d5ee697bff5ac4f10e2e54d3f40c44e48fe23",
+        "0x6ac8ff96fb8dcf5d79a8ef1e59d9ac23f2bd27bc"
+      ]
+    }
+  ],
+  "notes": "Application-contracts-only launch on Ethereum mainnet. Deploys the accepted GenesisSplitter unchanged, with the ProjectFactory LaunchRegistry and treasury as immutable static constructor arguments. The constructor makes no external calls. No owner, admin, setter or upgrade path. Anyone may call split(launchNumber) once per registered custom-token launch token: it pays that launch's other artifacts declaring a nonzero genesisAllocation() and serving the same token, then sends the remainder to the treasury. Missing or malformed allocation getters declare nothing; wrong-token declarations or overallocations revert. After splitting, anyone may sweep later deposits of that token to the same treasury; unsplit tokens cannot be swept. Future token launches must rehearse their bucket declarations and exact transfers: taxed, restricted or otherwise incompatible tokens can underpay or prevent splitting. This deployment creates no token, pool or reward distributor and requires no ETH funding or initialization calls."
+}
